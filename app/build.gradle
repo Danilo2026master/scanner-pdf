@@ -1,0 +1,39 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'br.scanner.pdf'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'br.scanner.pdf'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+    }
+}
+
+dependencies {
+    // Scanner de documentos do Google (recorte de bordas, filtros, várias páginas, gera PDF).
+    implementation 'com.google.android.gms:play-services-mlkit-document-scanner:16.0.0'
+    // Leitura de texto (OCR) pelo Google Play Services: deixa o app pequeno.
+    implementation 'com.google.android.gms:play-services-mlkit-text-recognition:19.0.1'
+}
