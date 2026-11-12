@@ -1,10 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
-        <item name="android:colorPrimary">#FF2563EB</item>
-        <item name="android:colorAccent">#FF60A5FA</item>
-        <item name="android:windowBackground">#FF0D1117</item>
-        <item name="android:statusBarColor">#FF0D1117</item>
-        <item name="android:navigationBarColor">#FF0D1117</item>
+    <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">#FF000000</item>
+        <item name="android:colorPrimaryDark">#FFFFFFFF</item>
+        <item name="android:colorAccent">#FF000000</item>
+        <item name="android:colorControlActivated">#FF000000</item>
+        <item name="android:colorControlHighlight">#22000000</item>
+        <item name="android:textColorPrimary">#FF000000</item>
+        <item name="android:textColorSecondary">#FF707070</item>
+        <item name="android:windowBackground">#FFFFFFFF</item>
+        <item name="android:statusBarColor">#FFFFFFFF</item>
+        <item name="android:navigationBarColor">#FFFFFFFF</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:fontFamily">@font/tinos</item>
+        <item name="android:alertDialogTheme">@style/Dialog</item>
+    </style>
+
+    <style name="Dialog" parent="android:Theme.Material.Light.Dialog.Alert">
+        <item name="android:colorAccent">#FF000000</item>
+        <item name="android:colorControlActivated">#FF000000</item>
+        <item name="android:textColorPrimary">#FF000000</item>
+        <item name="android:fontFamily">@font/tinos</item>
     </style>
 </resources>

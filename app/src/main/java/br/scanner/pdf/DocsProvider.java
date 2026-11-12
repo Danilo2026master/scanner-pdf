@@ -12,7 +12,7 @@ import android.provider.OpenableColumns;
 import java.io.File;
 import java.io.FileNotFoundException;
 
-/** Entrega os PDFs para outros apps (abrir, enviar pelo WhatsApp, e-mail…) sem pedir permissão de armazenamento. */
+/** Entrega os PDFs (e .tex) para outros apps (abrir, enviar pelo WhatsApp, e-mail…) sem pedir permissão de armazenamento. */
 public class DocsProvider extends ContentProvider {
 
     static Uri uriFor(Context c, File f) {
@@ -22,7 +22,7 @@ public class DocsProvider extends ContentProvider {
     private File fileFor(Uri uri) throws FileNotFoundException {
         String name = uri.getLastPathSegment();
         if (name == null || name.contains("/") || name.contains("..")) throw new FileNotFoundException();
-        File f = new File(MainActivity.docsDir(getContext()), name);
+        File f = new File(Store.dir(getContext()), name);
         if (!f.exists()) throw new FileNotFoundException(name);
         return f;
     }
@@ -58,6 +58,9 @@ public class DocsProvider extends ContentProvider {
 
     @Override
     public String getType(Uri uri) {
+        String n = uri.getLastPathSegment() == null ? "" : uri.getLastPathSegment().toLowerCase(java.util.Locale.ROOT);
+        if (n.endsWith(".tex")) return "text/x-tex";
+        if (n.endsWith(".zip")) return "application/zip";
         return "application/pdf";
     }
 

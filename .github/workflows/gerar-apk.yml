@@ -1,4 +1,4 @@
-# Monta o APK do Scanner PDF nos servidores do GitHub a cada envio de código.
+# Monta o APK do Scanabla nos servidores do GitHub a cada envio de código.
 # O APK fica disponível em "Releases" (download direto pelo celular) e em "Actions" (artefato).
 name: Gerar APK
 
@@ -26,22 +26,32 @@ jobs:
       - name: Preparar o Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Assinatura fixa (opcional, permite atualizar sem desinstalar)
+        env:
+          DEBUG_KEYSTORE: ${{ secrets.DEBUG_KEYSTORE }}
+        run: |
+          if [ -n "$DEBUG_KEYSTORE" ]; then
+            mkdir -p ~/.android
+            echo "$DEBUG_KEYSTORE" | base64 -d > ~/.android/debug.keystore
+            echo "Usando a chave fixa do repositório."
+          fi
+
       - name: Montar o APK
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
-          cp app/build/outputs/apk/debug/app-debug.apk scanner-pdf.apk
+          cp app/build/outputs/apk/debug/app-debug.apk scanabla.apk
 
       - name: Guardar o APK (Actions)
         uses: actions/upload-artifact@v4
         with:
-          name: scanner-pdf.apk
-          path: scanner-pdf.apk
+          name: scanabla.apk
+          path: scanabla.apk
 
       - name: Publicar em Releases (link direto para o celular)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: Scanner PDF (versão ${{ github.run_number }})
-          body: Baixe o arquivo scanner-pdf.apk abaixo direto no celular e instale.
-          files: scanner-pdf.apk
+          name: Scanabla (versão ${{ github.run_number }})
+          body: Baixe o arquivo scanabla.apk abaixo direto no celular e instale.
+          files: scanabla.apk
