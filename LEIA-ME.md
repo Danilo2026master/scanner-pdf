@@ -10,9 +10,17 @@ Preto e branco, fonte serifada, direto ao ponto.
 - **Abrir PDF** do celular (ou "Abrir com → Scanabla" em outro app).
 - **Organizar páginas**: mover, girar, excluir e adicionar páginas (escaneando, de outro PDF ou de um documento salvo).
 - **Unir PDFs**: junta vários em um, já com a ordem que você quiser.
-- **Converter para LaTeX**: fotos de escrita à mão viram código LaTeX editável e depois PDF. O `.tex` fica salvo junto.
-- **Enviar para GitHub**: manda o PDF ou um **ZIP** (PDF + `.tex`) para um repositório seu.
-- **Texto (OCR)**, **Enviar**, **Renomear**, **Excluir** e **cópia em Download/Scanabla**.
+- **Converter para LaTeX** (abas Fotos · Código · PDF):
+  - **Organizado**: as anotações viram um documento arrumado: título, seções, listas, caixas de definição, fórmulas em destaque, exemplos, tabelas. Fonte Times.
+  - **Fiel**: transcrição exata, na ordem e com as palavras do caderno.
+  - Desenhos e gráficos são **recortados da foto** e entram como figuras.
+  - Se o LaTeX der erro, o app pede a correção ao Gemini sozinho (até 2 vezes).
+  - O PDF aparece na própria tela; toque nas páginas ou fotos para ampliar.
+- **Enviar para GitHub**: manda o **projeto LaTeX** (main.tex, figuras/ e o PDF) para editar depois no **Overleaf** ou no **TeXmaker**.
+  - Com "Compactar (ZIP)": um .zip (no Overleaf: Novo projeto → Carregar projeto). Em repositório público aparece "Abrir no Overleaf".
+  - Sem ZIP: uma pasta com os arquivos, num único commit.
+  - PDF escaneado (sem LaTeX) vai como projeto também: um main.tex que inclui as páginas do PDF.
+- **Texto (OCR)**, **Enviar** (PDF ou projeto .zip), **Renomear**, **Excluir** e **cópia em Download/Scanabla**.
 
 ## O que precisa de configuração
 

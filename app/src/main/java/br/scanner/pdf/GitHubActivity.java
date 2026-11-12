@@ -19,6 +19,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import java.io.File;
+import java.net.URLEncoder;
 import java.util.List;
 
 /** Envia o PDF (ou o ZIP com PDF + .tex) para um repositório do GitHub. */
@@ -29,7 +30,9 @@ public class GitHubActivity extends Activity {
     private EditText folder;
     private CheckBox zip;
     private LinearLayout done;
+    private View overleafBtn;
     private String link;
+    private String overleaf;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,6 +55,10 @@ public class GitHubActivity extends Activity {
         TextView name = Ui.centered(this, Store.base(file), 21, Ui.INK, Typeface.NORMAL);
         name.setPadding(0, Ui.dp(this, 12), 0, 0);
         col.addView(name);
+        TextView what = Ui.centered(this, Store.hasTex(file)
+                ? "Projeto LaTeX: main.tex, figuras e PDF" : "Projeto LaTeX com o PDF", 15, Ui.GREY, Typeface.ITALIC);
+        col.addView(what);
+        col.addView(Ui.centered(this, "abre no Overleaf e no TeXmaker", 15, Ui.GREY, Typeface.ITALIC));
 
         LinearLayout repo = Ui.button(this, R.drawable.ic_folder, "", false, v -> chooseRepo());
         repoLabel = Ui.text(this, "", 18, Ui.INK, Typeface.NORMAL);
@@ -96,6 +103,10 @@ public class GitHubActivity extends Activity {
         done.addView(Ui.button(this, R.drawable.ic_open, "Ver no GitHub", false, v -> {
             if (link != null) startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(link)));
         }), Ui.full(this, 50, 10));
+        overleafBtn = Ui.button(this, R.drawable.ic_tex, "Abrir no Overleaf", false, v -> {
+            if (overleaf != null) startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(overleaf)));
+        });
+        done.addView(overleafBtn, Ui.full(this, 50, 10));
         col.addView(done);
     }
 
@@ -224,29 +235,41 @@ public class GitHubActivity extends Activity {
             AlertDialog pd = Ui.progress(this, "Enviando…");
             done.setVisibility(View.GONE);
             Store.IO.execute(() -> {
-                String url = null;
+                GitHub.Sent sent = null;
+                String ol = null;
                 String err = null;
                 File up = null;
                 try {
-                    up = asZip ? Store.zip(this, file) : file;
-                    String name = Store.slug(Store.base(file)) + (asZip ? ".zip" : ".pdf");
-                    String path = folderPath.isEmpty() ? name : folderPath + "/" + name;
-                    path = GitHub.freePath(tk, repo, path);
-                    url = GitHub.upload(tk, repo, path, up, "Scanabla: " + Store.base(file));
+                    String slug = Store.slug(Store.base(file));
+                    String msg = "Scanabla: " + Store.base(file);
+                    if (asZip) {
+                        up = Store.projectZip(this, file);
+                        String path = GitHub.freePath(tk, repo, (folderPath.isEmpty() ? "" : folderPath + "/") + slug + ".zip");
+                        sent = GitHub.putFile(tk, repo, path, new Store.ProjFile(path, up, null), msg);
+                        if (sent.download != null && sent.download.startsWith("https://") && GitHub.isPublic(tk, repo)) {
+                            ol = "https://www.overleaf.com/docs?snip_uri=" + URLEncoder.encode(sent.download, "UTF-8");
+                        }
+                    } else {
+                        String dirPath = GitHub.freePath(tk, repo, (folderPath.isEmpty() ? "" : folderPath + "/") + slug);
+                        sent = GitHub.commitFiles(tk, repo, dirPath, Store.projectFiles(file), msg);
+                    }
                 } catch (Exception e) {
                     err = Ui.error(e);
                 } finally {
-                    if (asZip && up != null) up.delete();
+                    if (up != null) up.delete();
                 }
-                final String fu = url;
+                final GitHub.Sent fs = sent;
+                final String fo = ol;
                 final String fe = err;
                 runOnUiThread(() -> {
                     Ui.dismiss(this, pd);
-                    if (fu == null) {
+                    if (fs == null) {
                         Ui.alert(this, "Não enviado", fe);
                         return;
                     }
-                    link = fu;
+                    link = fs.html;
+                    overleaf = fo;
+                    overleafBtn.setVisibility(fo == null ? View.GONE : View.VISIBLE);
                     done.setVisibility(View.VISIBLE);
                 });
             });

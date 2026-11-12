@@ -12,18 +12,28 @@ import android.provider.OpenableColumns;
 import java.io.File;
 import java.io.FileNotFoundException;
 
-/** Entrega os PDFs (e .tex) para outros apps (abrir, enviar pelo WhatsApp, e-mail…) sem pedir permissão de armazenamento. */
+/** Entrega os PDFs (e projetos .zip) para outros apps (abrir, enviar pelo WhatsApp, e-mail…) sem pedir permissão de armazenamento. */
 public class DocsProvider extends ContentProvider {
 
     static Uri uriFor(Context c, File f) {
-        return Uri.parse("content://" + c.getPackageName() + ".docs/" + Uri.encode(f.getName()));
+        String base = "content://" + c.getPackageName() + ".docs/";
+        if (f.getParentFile() != null && f.getParentFile().equals(Store.work(c))) {
+            return Uri.parse(base + "work/" + Uri.encode(f.getName()));
+        }
+        return Uri.parse(base + Uri.encode(f.getName()));
     }
 
+    /** Só arquivos da pasta de documentos ou da pasta de trabalho (ZIPs para enviar). */
     private File fileFor(Uri uri) throws FileNotFoundException {
+        java.util.List<String> seg = uri.getPathSegments();
         String name = uri.getLastPathSegment();
         if (name == null || name.contains("/") || name.contains("..")) throw new FileNotFoundException();
-        File f = new File(Store.dir(getContext()), name);
-        if (!f.exists()) throw new FileNotFoundException(name);
+        File dir;
+        if (seg.size() == 1) dir = Store.dir(getContext());
+        else if (seg.size() == 2 && "work".equals(seg.get(0))) dir = Store.work(getContext());
+        else throw new FileNotFoundException();
+        File f = new File(dir, name);
+        if (!f.isFile()) throw new FileNotFoundException(name);
         return f;
     }
 

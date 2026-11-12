@@ -20,11 +20,14 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -68,9 +71,110 @@ final class Store {
         return f.getName().replaceAll("(?i)\\.pdf$", "");
     }
 
-    /** Código LaTeX que gerou o PDF (quando houver). */
-    static File tex(File pdf) {
+    // ---------------------------------------------------------------- projeto LaTeX
+
+    /** Pasta do projeto LaTeX de um PDF: main.tex + figuras/. */
+    static File project(File pdf) {
+        return new File(pdf.getParentFile(), base(pdf) + ".projeto");
+    }
+
+    /** Versão 2.0 guardava só um .tex ao lado do PDF. */
+    private static File legacyTex(File pdf) {
         return new File(pdf.getParentFile(), base(pdf) + ".tex");
+    }
+
+    static boolean hasTex(File pdf) {
+        return new File(project(pdf), "main.tex").exists() || legacyTex(pdf).exists();
+    }
+
+    static String readTex(File pdf) {
+        File t = new File(project(pdf), "main.tex");
+        if (!t.exists()) t = legacyTex(pdf);
+        if (!t.exists()) return null;
+        try {
+            return new String(java.nio.file.Files.readAllBytes(t.toPath()), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    static void writeText(File f, String text) throws IOException {
+        File parent = f.getParentFile();
+        if (parent != null && !parent.exists()) parent.mkdirs();
+        try (OutputStream os = new FileOutputStream(f)) {
+            os.write(text.getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
+    /** Copia o conteúdo de uma pasta (recursivo). */
+    static void copyDir(File from, File to) throws IOException {
+        File[] kids = from.listFiles();
+        if (kids == null) return;
+        to.mkdirs();
+        for (File k : kids) {
+            File dest = new File(to, k.getName());
+            if (k.isDirectory()) {
+                copyDir(k, dest);
+            } else {
+                try (InputStream in = new FileInputStream(k); OutputStream out = new FileOutputStream(dest)) {
+                    copy(in, out);
+                }
+            }
+        }
+    }
+
+    /** Grava o projeto do PDF: main.tex + figuras/ (copiadas da pasta de trabalho). */
+    static void saveProject(File pdf, String tex, File workProject) throws IOException {
+        File p = project(pdf);
+        deleteTree(p);
+        p.mkdirs();
+        writeText(new File(p, "main.tex"), tex);
+        File figs = new File(workProject, "figuras");
+        if (figs.isDirectory()) copyDir(figs, new File(p, "figuras"));
+        legacyTex(pdf).delete();
+    }
+
+    /** Um arquivo do projeto: caminho dentro do projeto + conteúdo (arquivo ou bytes). */
+    static final class ProjFile {
+        final String path;
+        final File file;
+        final byte[] data;
+
+        ProjFile(String path, File file, byte[] data) {
+            this.path = path;
+            this.file = file;
+            this.data = data;
+        }
+
+        long length() {
+            return data != null ? data.length : file.length();
+        }
+
+        InputStream open() throws IOException {
+            return data != null ? new java.io.ByteArrayInputStream(data) : new FileInputStream(file);
+        }
+    }
+
+    /**
+     * Projeto para editar no Overleaf/TeXmaker: main.tex, figuras/ e o PDF.
+     * PDF escaneado (sem LaTeX): main.tex que inclui as páginas do PDF.
+     */
+    static List<ProjFile> projectFiles(File pdf) {
+        List<ProjFile> out = new ArrayList<>();
+        String tex = readTex(pdf);
+        if (tex != null) {
+            out.add(new ProjFile("main.tex", null, tex.getBytes(StandardCharsets.UTF_8)));
+            File[] figs = new File(project(pdf), "figuras").listFiles();
+            if (figs != null) {
+                Arrays.sort(figs);
+                for (File f : figs) if (f.isFile()) out.add(new ProjFile("figuras/" + f.getName(), f, null));
+            }
+            out.add(new ProjFile(slug(base(pdf)) + ".pdf", pdf, null));
+        } else {
+            out.add(new ProjFile("main.tex", null, Latex.pdfpagesWrapper("documento.pdf").getBytes(StandardCharsets.UTF_8)));
+            out.add(new ProjFile("documento.pdf", pdf, null));
+        }
+        return out;
     }
 
     static String stamp() {
@@ -198,9 +302,11 @@ final class Store {
         File to = new File(f.getParentFile(), n + ".pdf");
         if (to.equals(f)) return f;
         if (to.exists()) return null;
-        File oldTex = tex(f);
+        File oldProject = project(f);
+        File oldTex = legacyTex(f);
         if (!f.renameTo(to)) return null;
-        if (oldTex.exists()) oldTex.renameTo(tex(to));
+        if (oldProject.exists()) oldProject.renameTo(project(to));
+        if (oldTex.exists()) oldTex.renameTo(legacyTex(to));
         SharedPreferences p = prefs(c);
         String dl = p.getString("dl:" + f.getName(), null);
         if (dl != null) {
@@ -217,7 +323,8 @@ final class Store {
 
     static void delete(Context c, File f) {
         f.delete();
-        tex(f).delete();
+        deleteTree(project(f));
+        legacyTex(f).delete();
         prefs(c).edit().remove("dl:" + f.getName()).apply();
     }
 
@@ -275,24 +382,20 @@ final class Store {
 
     // ---------------------------------------------------------------- ZIP
 
-    /** PDF + código .tex (se existir) num ZIP. */
-    static File zip(Context c, File pdf) throws IOException {
+    /** Projeto LaTeX inteiro num ZIP (é o formato que o Overleaf importa em "Upload project"). */
+    static File projectZip(Context c, File pdf) throws IOException {
         File out = new File(work(c), slug(base(pdf)) + ".zip");
         try (ZipOutputStream z = new ZipOutputStream(new FileOutputStream(out))) {
-            addZip(z, pdf);
-            File t = tex(pdf);
-            if (t.exists()) addZip(z, t);
+            for (ProjFile pf : projectFiles(pdf)) {
+                z.putNextEntry(new ZipEntry(pf.path));
+                try (InputStream in = pf.open()) {
+                    byte[] buf = new byte[64 * 1024];
+                    int n;
+                    while ((n = in.read(buf)) > 0) z.write(buf, 0, n);
+                }
+                z.closeEntry();
+            }
         }
         return out;
-    }
-
-    private static void addZip(ZipOutputStream z, File f) throws IOException {
-        z.putNextEntry(new ZipEntry(f.getName()));
-        try (InputStream in = new FileInputStream(f)) {
-            byte[] buf = new byte[64 * 1024];
-            int n;
-            while ((n = in.read(buf)) > 0) z.write(buf, 0, n);
-        }
-        z.closeEntry();
     }
 }

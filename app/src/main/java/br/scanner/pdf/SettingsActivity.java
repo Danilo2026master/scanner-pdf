@@ -54,7 +54,7 @@ public class SettingsActivity extends Activity {
             finish();
         }), Ui.full(this, 56, 28));
 
-        TextView about = Ui.centered(this, "Scanabla 2.0 · fonte Tinos (medidas da Times New Roman)", 13, Ui.GREY, Typeface.ITALIC);
+        TextView about = Ui.centered(this, "Scanabla 2.1 · fonte Tinos (medidas da Times New Roman)", 13, Ui.GREY, Typeface.ITALIC);
         about.setPadding(0, Ui.dp(this, 28), 0, 0);
         col.addView(about);
     }

@@ -61,7 +61,6 @@ public class MainActivity extends Activity {
         col.addView(Ui.section(this, "Recursos"));
         col.addView(Ui.item(this, R.drawable.ic_merge, "Unir PDFs", v -> merge()));
         col.addView(Ui.item(this, R.drawable.ic_grid, "Organizar páginas", v -> chooseDoc(this::organize)));
-        col.addView(Ui.item(this, R.drawable.ic_trash, "Excluir páginas", v -> chooseDoc(this::organize)));
         col.addView(Ui.item(this, R.drawable.ic_tex, "Converter para LaTeX",
                 v -> startActivity(new Intent(this, LatexActivity.class))));
         col.addView(Ui.item(this, R.drawable.ic_upload, "Enviar para GitHub", v -> chooseDoc(f ->

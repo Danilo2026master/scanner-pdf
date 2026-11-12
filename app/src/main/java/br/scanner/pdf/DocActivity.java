@@ -196,12 +196,40 @@ public class DocActivity extends Activity {
     }
 
     private void share() {
+        if (!Store.hasTex(file)) {
+            sharePdf();
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle("Enviar")
+                .setItems(new String[]{"PDF", "Projeto LaTeX (.zip)"}, (d, w) -> {
+                    if (w == 0) sharePdf();
+                    else shareProject();
+                }).show();
+    }
+
+    private void sharePdf() {
+        send(file, "application/pdf");
+    }
+
+    /** ZIP com main.tex + figuras + PDF: no Overleaf, "Novo projeto → Carregar projeto". */
+    private void shareProject() {
+        Store.IO.execute(() -> {
+            try {
+                File zip = Store.projectZip(this, file);
+                runOnUiThread(() -> send(zip, "application/zip"));
+            } catch (Exception e) {
+                runOnUiThread(() -> Ui.toast(this, Ui.error(e)));
+            }
+        });
+    }
+
+    private void send(File f, String type) {
         Intent i = new Intent(Intent.ACTION_SEND);
-        i.setType("application/pdf");
-        Uri uri = DocsProvider.uriFor(this, file);
+        i.setType(type);
+        Uri uri = DocsProvider.uriFor(this, f);
         i.putExtra(Intent.EXTRA_STREAM, uri);
         i.putExtra(Intent.EXTRA_SUBJECT, Store.base(file));
-        i.setClipData(ClipData.newRawUri(file.getName(), uri));
+        i.setClipData(ClipData.newRawUri(f.getName(), uri));
         i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         startActivity(Intent.createChooser(i, "Enviar"));
     }
@@ -221,7 +249,7 @@ public class DocActivity extends Activity {
 
     private void downloads() {
         if (Build.VERSION.SDK_INT < 29) {
-            share();
+            sharePdf();
             return;
         }
         Store.IO.execute(() -> {

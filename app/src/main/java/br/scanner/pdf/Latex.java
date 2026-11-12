@@ -1,24 +1,50 @@
 package br.scanner.pdf;
 
-import org.json.JSONObject;
-
 import android.util.Base64;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.File;
 import java.net.HttpURLConnection;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.Arrays;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-/** LaTeX: montar o documento e compilar para PDF em serviços online grátis. */
+/** LaTeX: preâmbulo padrão, montagem do documento e compilação para PDF em serviços online grátis. */
 final class Latex {
 
-    static final String PREAMBLE = "\\documentclass[12pt]{article}\n"
+    /** Preâmbulo das anotações: Times (mathptmx), caixas pretas e brancas, química, tabelas e figuras. */
+    static final String HEAD = "\\documentclass[11pt,a4paper]{article}\n"
             + "\\usepackage[utf8]{inputenc}\n"
             + "\\usepackage[T1]{fontenc}\n"
-            + "\\usepackage{amsmath,amssymb}\n"
-            + "\\usepackage[margin=2.5cm]{geometry}\n\n"
-            + "\\begin{document}\n\n";
+            + "\\usepackage{amsmath,amsthm,mathtools}\n"
+            + "\\usepackage{amssymb}\n"
+            + "\\usepackage{mathptmx}\n"
+            + "\\usepackage[version=4]{mhchem}\n"
+            + "\\usepackage{graphicx}\n"
+            + "\\usepackage{float}\n"
+            + "\\usepackage{booktabs}\n"
+            + "\\usepackage{enumitem}\n"
+            + "\\usepackage[margin=2.2cm]{geometry}\n"
+            + "\\usepackage[breakable]{tcolorbox}\n"
+            + "\\usepackage[hidelinks]{hyperref}\n"
+            + "\\newtcolorbox{caixa}[1]{breakable,colback=white,colframe=black,boxrule=0.6pt,arc=2pt,\n"
+            + "  colbacktitle=black,coltitle=white,fonttitle=\\bfseries,title={#1}}\n"
+            + "\\newtcolorbox{destaque}{breakable,colback=black!4,colframe=black!60,boxrule=0.4pt,arc=2pt}\n"
+            + "\\newenvironment{exemplo}{\\par\\medskip\\noindent\\textbf{Exemplo.}\\ }{\\par\\medskip}\n"
+            + "\\newcommand{\\ilegivel}{\\textbf{[?]}}\n"
+            + "\\renewcommand{\\figurename}{Figura}\n"
+            + "\\renewcommand{\\tablename}{Tabela}\n"
+            + "\\renewcommand{\\contentsname}{Sumário}\n"
+            + "\\setlist{itemsep=2pt}\n";
 
-    /** Erro de compilação (código LaTeX com problema): mostra as linhas do log que importam. */
+    static final String PREAMBLE = HEAD + "\n\\begin{document}\n\n";
+
+    /** Erro de compilação (código LaTeX com problema): traz as linhas do log que importam. */
     static final class CompileError extends Exception {
         CompileError(String log) {
             super(log);
@@ -31,7 +57,13 @@ final class Latex {
         return PREAMBLE + body.trim() + "\n\n\\end{document}\n";
     }
 
-    /** Texto simples (sem fórmulas) vindo do OCR: escapa caracteres especiais. */
+    /** Projeto para PDFs escaneados: um main.tex que inclui as páginas do PDF (abre no Overleaf/TeXmaker). */
+    static String pdfpagesWrapper(String pdfName) {
+        return "\\documentclass{article}\n\\usepackage{pdfpages}\n\n\\begin{document}\n"
+                + "\\includepdf[pages=-]{" + pdfName + "}\n\\end{document}\n";
+    }
+
+    /** Texto simples (sem fórmulas) vindo do OCR. */
     static String fromPlain(String[] pages) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < pages.length; i++) {
@@ -54,22 +86,63 @@ final class Latex {
                     b.append('\\').append(ch); break;
                 case '~': b.append("\\textasciitilde{}"); break;
                 case '^': b.append("\\textasciicircum{}"); break;
+                case '→': b.append("$\\to$"); break;
+                case '←': b.append("$\\leftarrow$"); break;
+                case '⇒': b.append("$\\Rightarrow$"); break;
+                case '≥': b.append("$\\geq$"); break;
+                case '≤': b.append("$\\leq$"); break;
+                case '≠': b.append("$\\neq$"); break;
+                case '≈': b.append("$\\approx$"); break;
+                case '±': b.append("$\\pm$"); break;
+                case '×': b.append("$\\times$"); break;
+                case '÷': b.append("$\\div$"); break;
+                case '°': b.append("$^\\circ$"); break;
+                case '∆': case 'Δ': b.append("$\\Delta$"); break;
+                case '•': b.append("$\\bullet$"); break;
                 default: b.append(ch);
             }
         }
         return b.toString();
     }
 
+    /** Título do documento (\title{...}) em texto simples, para nomear o PDF. */
+    static String titleOf(String tex) {
+        Matcher m = Pattern.compile("\\\\title\\{([^}]*)\\}").matcher(tex);
+        if (!m.find()) return null;
+        String t = m.group(1).replaceAll("\\\\[A-Za-z]+\\*?", " ").replaceAll("[{}$\\\\]", " ")
+                .replaceAll("\\s+", " ").trim();
+        if (t.isEmpty()) return null;
+        return t.length() > 40 ? t.substring(0, 40).trim() : t;
+    }
+
+    /** Troca \includegraphics de figuras que não existem por uma caixa "Figura" (evita erro de compilação). */
+    static String fixFigures(String tex, File projectDir) {
+        Matcher m = Pattern.compile("\\\\includegraphics(\\[[^\\]]*\\])?\\{([^}]*)\\}").matcher(tex);
+        StringBuffer sb = new StringBuffer();
+        while (m.find()) {
+            File f = new File(projectDir, m.group(2).trim());
+            m.appendReplacement(sb, Matcher.quoteReplacement(f.exists() ? m.group(0) : "\\fbox{Figura}"));
+        }
+        m.appendTail(sb);
+        return sb.toString();
+    }
+
     // ---------------------------------------------------------------- compilar
 
-    static byte[] compile(String tex) throws Exception {
+    /** Compila main.tex (+ figuras/ de projectDir, se houver). */
+    static byte[] compile(String tex, File projectDir) throws Exception {
+        File[] figs = projectDir == null ? null : new File(projectDir, "figuras").listFiles();
+        if (figs != null) Arrays.sort(figs);
         String net;
         try {
-            return ytotech(tex);
+            return ytotech(tex, figs);
         } catch (CompileError e) {
             throw e;
         } catch (Exception e) {
             net = Ui.error(e);
+        }
+        if (figs != null && figs.length > 0) {
+            throw new Exception("Serviço de LaTeX fora do ar ou sem internet.\n" + net);
         }
         try {
             return latexOnline(tex);
@@ -80,13 +153,19 @@ final class Latex {
         }
     }
 
-    /** latex.ytotech.com — POST /builds/sync com o .tex em base64. */
-    private static byte[] ytotech(String tex) throws Exception {
-        JSONObject res = new JSONObject().put("main", true)
-                .put("file", Base64.encodeToString(tex.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP));
-        JSONObject body = new JSONObject().put("compiler", "pdflatex")
-                .put("resources", new org.json.JSONArray().put(res));
-        HttpURLConnection c = Net.open("https://latex.ytotech.com/builds/sync", "POST", 120000);
+    /** latex.ytotech.com — POST /builds/sync com os arquivos em base64. */
+    private static byte[] ytotech(String tex, File[] figs) throws Exception {
+        JSONArray res = new JSONArray();
+        res.put(new JSONObject().put("main", true)
+                .put("file", Base64.encodeToString(tex.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP)));
+        if (figs != null) {
+            for (File f : figs) {
+                res.put(new JSONObject().put("path", "figuras/" + f.getName())
+                        .put("file", Base64.encodeToString(Files.readAllBytes(f.toPath()), Base64.NO_WRAP)));
+            }
+        }
+        JSONObject body = new JSONObject().put("compiler", "pdflatex").put("resources", res);
+        HttpURLConnection c = Net.open("https://latex.ytotech.com/builds/sync", "POST", 150000);
         c.setRequestProperty("Content-Type", "application/json");
         Net.Response r = Net.send(c, body.toString().getBytes(StandardCharsets.UTF_8));
         if (r.ok() && Net.isPdf(r.body)) return r.body;
@@ -102,7 +181,7 @@ final class Latex {
         throw new Exception("ytotech " + r.code);
     }
 
-    /** latexonline.cc — GET /compile?text=… (reserva, para documentos não muito longos). */
+    /** latexonline.cc — GET /compile?text=… (reserva, só sem figuras e para documentos não muito longos). */
     private static byte[] latexOnline(String tex) throws Exception {
         String url = "https://latexonline.cc/compile?text=" + URLEncoder.encode(tex, "UTF-8");
         if (url.length() > 7800) throw new Exception("documento longo demais para o serviço reserva");

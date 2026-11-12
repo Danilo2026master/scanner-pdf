@@ -30,7 +30,7 @@ final class Net {
         c.setRequestMethod(method);
         c.setConnectTimeout(15000);
         c.setReadTimeout(readTimeoutMs);
-        c.setRequestProperty("User-Agent", "Scanabla/2.0 (Android)");
+        c.setRequestProperty("User-Agent", "Scanabla/2.1 (Android)");
         return c;
     }
 
